@@ -60,30 +60,3 @@ footer {
     bottom: 0;
     width: 100%;
 }
-
-/* Custom app styles */
-.img-cover {
-    width: 96px;
-    height: 140px;
-    object-fit: cover;
-    border-top-left-radius: 6px;
-    border-bottom-left-radius: 6px;
-}
-.img-cover.placeholder {
-    width: 96px;
-    height: 140px;
-}
-.title-line {
-    max-width: 320px;
-}
-.text-truncate-2-lines {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-.card .card-body .btn { padding: .35rem .6rem; }
-
-/* Make modal form fields nicer */
-.modal .form-label { font-weight:600; }
