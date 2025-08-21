@@ -1,41 +1,28 @@
 <?php
-// Inicialização da aplicação: sessão, persistência e handlers de auth
 session_start();
 
-$usersFile = __DIR__ . '/../data/users.json';
-if (!file_exists($usersFile)) {
-    @mkdir(dirname($usersFile), 0777, true);
-    file_put_contents($usersFile, json_encode([]));
-}
+// Configuração do banco de dados
+$dbHost = 'localhost';
+$dbName = 'bibliotecapessoal';
+$dbUser = 'root';
+$dbPass = '';
 
-function load_users($file)
-{
-    $data = @file_get_contents($file) ?: '[]';
-    $users = json_decode($data, true);
-    return is_array($users) ? $users : [];
-}
-
-function save_users($file, $users)
-{
-    file_put_contents($file, json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-}
-
-function find_user($users, $email)
-{
-    foreach ($users as $u) {
-        if (isset($u['email']) && strtolower($u['email']) === strtolower($email)) {
-            return $u;
-        }
-    }
-    return null;
+try {
+    $pdo = new PDO("mysql:host=$dbHost;dbname=$dbName;charset=utf8", $dbUser, $dbPass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+    ]);
+} catch (PDOException $e) {
+    die('Erro ao conectar ao banco de dados: ' . $e->getMessage());
 }
 
 $errors = [];
 $success = null;
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $email = trim($_POST['email'] ?? '');
+
     if ($action === 'register') {
         $name = trim($_POST['name'] ?? '');
         $password = $_POST['password'] ?? '';
@@ -46,24 +33,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         } elseif (strlen($password) < 6) {
             $errors[] = 'A senha deve ter pelo menos 6 caracteres.';
         } else {
-            $users = load_users($usersFile);
-            if (find_user($users, $email)) {
+            // Verifica se já existe
+            $stmt = $pdo->prepare('SELECT id FROM users WHERE email = ?');
+            $stmt->execute([$email]);
+            if ($stmt->fetch()) {
                 $errors[] = 'E-mail já cadastrado.';
             } else {
-                $users[] = [
-                    'name' => $name,
-                    'email' => $email,
-                    'password' => password_hash($password, PASSWORD_DEFAULT),
-                    'createdAt' => date('c'),
-                ];
-                save_users($usersFile, $users);
-                $success = 'Cadastro realizado com sucesso. Faça login.';
+                $hash = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $pdo->prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)');
+                $stmt->execute([$name, $email, $hash]);
+                    $_SESSION['user'] = [
+                        'name' => $name,
+                        'email' => $email,
+                    ];
+                    // Redireciona para a home (dashboard será exibido quando logado)
+                    header('Location: /bibliotecapessoal/');
+                    exit;
             }
         }
-    } elseif ($action === 'login') {
+    }
+
+    if ($action === 'login') {
         $password = $_POST['password'] ?? '';
-        $users = load_users($usersFile);
-        $u = find_user($users, $email);
+        $stmt = $pdo->prepare('SELECT name, email, password FROM users WHERE email = ?');
+        $stmt->execute([$email]);
+        $u = $stmt->fetch();
         if (!$u || !password_verify($password, $u['password'])) {
             $errors[] = 'Credenciais inválidas.';
         } else {
@@ -71,15 +65,57 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 'name' => $u['name'],
                 'email' => $u['email'],
             ];
-            header('Location: ' . ($_SERVER['PHP_SELF'] ?? '/'));
-            exit;
+                // Redireciona para a home (dashboard)
+                header('Location: /bibliotecapessoal/');
+                exit;
         }
-    } elseif ($action === 'logout') {
+    }
+
+    if ($action === 'logout') {
         $_SESSION = [];
         if (session_id() !== '') {
             session_destroy();
         }
-        header('Location: ' . ($_SERVER['PHP_SELF'] ?? '/'));
+        header('Location: /bibliotecapessoal/index.php');
         exit;
     }
+
+        // Permite adicionar itens simples (livro, filme, tarefa) gravados em JSON localmente
+        if ($action === 'add_item') {
+            if (!isset($_SESSION['user'])) {
+                $errors[] = 'Você precisa estar logado para adicionar itens.';
+            } else {
+                $type = $_POST['type'] ?? '';
+                $title = trim($_POST['title'] ?? '');
+                $notes = trim($_POST['notes'] ?? '');
+                $author = trim($_POST['author'] ?? '');
+                $year = trim($_POST['year'] ?? '');
+                $cover = trim($_POST['cover'] ?? '');
+                if ($type === '' || $title === '') {
+                    $errors[] = 'Preencha o tipo e o título do item.';
+                } else {
+                    $dataFile = __DIR__ . '/../data/items.json';
+                    $items = [];
+                    if (file_exists($dataFile)) {
+                        $items = json_decode(file_get_contents($dataFile), true) ?: [];
+                    }
+                    $items[] = [
+                        'id' => uniqid('', true),
+                        'user' => $_SESSION['user']['email'],
+                        'type' => $type,
+                        'title' => $title,
+                        'author' => $author,
+                        'year' => $year,
+                        'cover' => $cover,
+                        'notes' => $notes,
+                        'createdAt' => date('c'),
+                    ];
+                    file_put_contents($dataFile, json_encode($items, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                    // flash de sucesso via sessao para exibir toast apos redirect
+                    $_SESSION['flash_success'] = 'Item adicionado com sucesso.';
+                    header('Location: /bibliotecapessoal/');
+                    exit;
+                }
+            }
+        }
 }

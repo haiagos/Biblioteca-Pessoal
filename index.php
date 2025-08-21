@@ -10,7 +10,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body class="d-flex flex-column min-vh-100">
-  <!-- Toasts container -->
+  
   <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1080" id="toastContainer"></div>
   <?php include __DIR__ . '/partials/header.php'; ?>
 
@@ -23,7 +23,6 @@
   <?php include __DIR__ . '/partials/footer.php'; ?>
   <?php $act = $_POST['action'] ?? ''; ?>
   <script>
-    // Bootstrap client-side validation
     (() => {
       'use strict';
       const forms = document.querySelectorAll('.needs-validation');
@@ -38,7 +37,6 @@
       });
     })();
 
-    // Toast helper
     function showToast(message, variant = 'info') {
       const container = document.getElementById('toastContainer');
       const wrapper = document.createElement('div');
@@ -57,7 +55,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-      // Auto-open relevant modal after POST errors or after success
   <?php if (!empty($errors)): ?>
         <?php if ($act === 'login'): ?>
           new bootstrap.Modal(document.getElementById('loginModal')).show();
